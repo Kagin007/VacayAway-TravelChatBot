@@ -37,7 +37,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     //check if optional flightType
     const flightType = agent.parameters['flight_type'] || '';
 
-    const docRef = db.collection('users').doc(session_id);
+    const docRef = db.collection(session_id).doc('flightDetails');
 
     await docRef.set({
       date: date,
@@ -52,22 +52,38 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   async function bookRoom(agent) {
     agent.add('Booking room...')
 
-    const date = agent.parameters.date;
-    const roomType = agent.parameters['room_type'];
-    const toCity = agent.parameters['geo-city'];
-    //check if optional flightType
+    const date = agent.parameters.date || 'error no date'
+    const roomType = agent.parameters['room_type'] || 'error no room'
+    const toCity = agent.parameters['geo-city'] || 'error no city'
 
-    const docRef = db.collection('users').doc(session_id);
+    const docRef = db.collection(session_id).doc('roomDetails');
 
     await docRef.set({
       date: date,
-      toCity: fromCity,
       toCity: toCity,
       roomType: roomType
     });
 
-    agent.add(`Your room has been booked for ${date} for ${fromCity}. Would you like to book a car for when you arrive?`)
+    agent.add(`Your room has been booked in ${toCity} on ${date}. Is there anything else I can help you with?`)
   };
+
+    async function bookCar(agent) {
+      agent.add('Booking car...')
+  
+      const date = agent.parameters.date || 'error no date'
+      const carType = agent.parameters['car_type'] || 'error no car type'
+      const toCity = agent.parameters['geo-city'] || 'error no city'
+
+      const docRef = db.collection(session_id).doc('carDetails');
+  
+      await docRef.set({
+        date: date,
+        toCity: toCity,
+        carType: carType
+      });
+
+      agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)
+    }
 
   async function weather(agent) {
     await axios({
@@ -126,12 +142,18 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   }
 
   async function getSessionData(agent) {
-    const snapshot = db.collection('users').doc(session_id);
-    const doc = await snapshot.get();
-    if (!doc.exists) {
-      agent.add("It doesn't look we have anything picked out yet.")
+    const flightSnapshot = db.collection(session_id).doc(flightDetails);
+    const roomSnapshot = db.collection(session_id).doc(roomDetails);
+    const carSnapshot = db.collection(session_id).doc(carDetails);
+
+    const docFlight = await flightSnapshot.get();
+    const docRoom = await roomSnapshot.get();
+    const docCar = await carSnapshot.get();
+
+    if (!docFlight.exists && !docRoom && !docCar) {
+      agent.add("It doesn't look we have anything booked yet.")
     } else {
-      agent.add(`Our records show your name is ${doc.data().first} and you would like to pay with ${doc.data().last}`)
+      agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date}. We have a ${docRoom.data().room_type} booked for you as well and a ${docCar.data().car_type}`)
       }    
   }
 
@@ -145,6 +167,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('Get Weather', weather);
   intentMap.set('BookFlights', bookFlight);
   intentMap.set('Order Query', getSessionData);
-  intentMap.set('BookRoom', bookRoom);
+  intentMap.set('BookRooms', bookRoom);
+  intentMap.set('BookCars', bookCar);
   agent.handleRequest(intentMap);
 });
