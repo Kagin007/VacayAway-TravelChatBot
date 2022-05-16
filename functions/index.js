@@ -4,7 +4,7 @@
  
 const functions = require('firebase-functions');
 const axios = require('axios');
-const {WebhookClient} = require('dialogflow-fulfillment');
+const {WebhookClient, Payload} = require('dialogflow-fulfillment');
 
 require('dotenv').config()
 
@@ -28,6 +28,48 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   
   session_id = session_id_array[session_id_array.length - 1]
 
+  async function bookFlight(agent) {
+    agent.add('Booking flight...')
+
+    const date = agent.parameters.date;
+    const fromCity = agent.parameters['geo-city'];
+    const toCity = agent.parameters['geo-city1'];
+    //check if optional flightType
+    const flightType = agent.parameters['flight_type'] || '';
+
+    const docRef = db.collection('users').doc(session_id);
+
+    await docRef.set({
+      date: date,
+      fromCity: fromCity,
+      toCity: toCity,
+      flightType: flightType
+    });
+
+    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
+  };
+
+  async function bookRoom(agent) {
+    agent.add('Booking flight...')
+
+    const date = agent.parameters.date;
+    const fromCity = agent.parameters['geo-city'];
+    const toCity = agent.parameters['geo-city1'];
+    //check if optional flightType
+    const flightType = agent.parameters['flight_type'] || '';
+
+    const docRef = db.collection('users').doc(session_id);
+
+    await docRef.set({
+      date: date,
+      fromCity: fromCity,
+      toCity: toCity,
+      flightType: flightType
+    });
+
+    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
+  };
+
   async function weather(agent) {
     await axios({
       url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=toronto&key=${API_KEY}&date=2022-05-15`,
@@ -38,7 +80,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       .catch((error)=>{
         console.log(error)
       })
-    }
+  }
 
   function welcome(agent) {
     agent.add(`Welcome to my agent DUUDE OMG ITS WORKING!!!!`);
@@ -81,8 +123,17 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     await docRef.set({
       first: name,
       last: typeofpayment,
-      born: 2021
     });
+  }
+
+  async function getSessionData(agent) {
+    const snapshot = db.collection('users').doc(session_id);
+    const doc = await snapshot.get();
+    if (!doc.exists) {
+      agent.add("It doesn't look we have anything picked out yet.")
+    } else {
+      agent.add(`Our records show your name is ${doc.data().first} and you would like to pay with ${doc.data().last}`)
+      }    
   }
 
   let intentMap = new Map();
@@ -93,5 +144,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('Question 2', question2);
   intentMap.set('Question 3', question3);
   intentMap.set('Get Weather', weather);
+  intentMap.set('BookFlights', bookFlight);
+  intentMap.set('Order Query', getSessionData);
   agent.handleRequest(intentMap);
 });
