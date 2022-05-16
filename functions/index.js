@@ -50,24 +50,23 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   };
 
   async function bookRoom(agent) {
-    agent.add('Booking flight...')
+    agent.add('Booking room...')
 
     const date = agent.parameters.date;
-    const fromCity = agent.parameters['geo-city'];
-    const toCity = agent.parameters['geo-city1'];
+    const roomType = agent.parameters['room_type'];
+    const toCity = agent.parameters['geo-city'];
     //check if optional flightType
-    const flightType = agent.parameters['flight_type'] || '';
 
     const docRef = db.collection('users').doc(session_id);
 
     await docRef.set({
       date: date,
-      fromCity: fromCity,
+      toCity: fromCity,
       toCity: toCity,
-      flightType: flightType
+      roomType: roomType
     });
 
-    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
+    agent.add(`Your room has been booked for ${date} for ${fromCity}. Would you like to book a car for when you arrive?`)
   };
 
   async function weather(agent) {
@@ -146,5 +145,6 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('Get Weather', weather);
   intentMap.set('BookFlights', bookFlight);
   intentMap.set('Order Query', getSessionData);
+  intentMap.set('BookRoom', bookRoom);
   agent.handleRequest(intentMap);
 });
