@@ -90,7 +90,15 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=toronto&key=${API_KEY}&date=2022-05-15`,
       })
       .then(response => {
-        agent.add(`Max temp: ${response.data.data.weather[0].maxtempC}`)
+        //save weather info and use as context for upselling
+        const maxTemp = response.data.data.weather[0].maxtempC
+
+        const docRef = db.collection(session_id).doc('weatherDetails');
+
+        await docRef.set({
+          maxTemp: maxTemp
+        });
+
       })
       .catch((error)=>{
         console.log(error)
@@ -142,19 +150,19 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   }
 
   async function getSessionData(agent) {
-    const flightSnapshot = db.collection(session_id).doc(flightDetails);
-    const roomSnapshot = db.collection(session_id).doc(roomDetails);
-    const carSnapshot = db.collection(session_id).doc(carDetails);
+    const flightSnapshot = db.collection(session_id).doc('flightDetails');
+    const roomSnapshot = db.collection(session_id).doc('roomDetails');
+    const carSnapshot = db.collection(session_id).doc('carDetails');
 
     const docFlight = await flightSnapshot.get();
     const docRoom = await roomSnapshot.get();
     const docCar = await carSnapshot.get();
 
-    if (!docFlight.exists && !docRoom && !docCar) {
+    if (!docFlight.exists && !docRoom.exists && !docCar.exists) {
       agent.add("It doesn't look we have anything booked yet.")
     } else {
-      agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date}. We have a ${docRoom.data().room_type} booked for you as well and a ${docCar.data().car_type}`)
-      }    
+      agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date}. We have a ${docRoom.data().roomType} room booked for you as well and a ${docCar.data().carType}`)
+      }
   }
 
   let intentMap = new Map();
