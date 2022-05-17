@@ -31,7 +31,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   async function bookFlight(agent) {
     agent.add('Booking flight...')
 
-    const date = agent.parameters.date;
+    const date = agent.parameters.date.split('T')[0];
     const fromCity = agent.parameters['geo-city'];
     const toCity = agent.parameters['geo-city1'];
     //check if optional flightType
@@ -52,7 +52,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   async function bookRoom(agent) {
     agent.add('Booking room...')
 
-    const date = agent.parameters.date || 'error no date'
+    const date = agent.parameters.date.split('T')[0] || 'error no date'
     const roomType = agent.parameters['room_type'] || 'error no room'
     const toCity = agent.parameters['geo-city'] || 'error no city'
 
@@ -70,7 +70,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     async function bookCar(agent) {
       agent.add('Booking car...')
   
-      const date = agent.parameters.date || 'error no date'
+      const date = agent.parameters.date.split('T')[0] || 'error no date'
       const carType = agent.parameters['car_type'] || 'error no car type'
       const toCity = agent.parameters['geo-city'] || 'error no city'
 
@@ -80,73 +80,43 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         date: date,
         toCity: toCity,
         carType: carType
-      });
+      })
+        //update weather for city
+        weather(agent)
+      
+        const weatherSnapshot = db.collection(session_id).doc('weatherDetails');
 
-      agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)
+        const docWeather = await weatherSnapshot.get();
+
+        const maxTemp = docWeather.data().maxTemp
+
+        if (maxTemp > 18 && carType !== 'convertible') {
+          agent.add(`It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`)
+        } else {
+          agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)          
+        }
     }
 
   async function weather(agent) {
+    const city = agent.parameters['geo-city'];
+    const date = agent.parameters.date.split('T')[0];
+
     await axios({
-      url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=toronto&key=${API_KEY}&date=2022-05-15`,
+      url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=${city}&key=${API_KEY}&date=${date}`,
       })
-      .then(response => {
-        //save weather info and use as context for upselling
+      .then(async response => {
+        //save weather info and use as 'context' for upselling
         const maxTemp = response.data.data.weather[0].maxtempC
 
         const docRef = db.collection(session_id).doc('weatherDetails');
 
         await docRef.set({
-          maxTemp: maxTemp
+          maxTemp: Number(maxTemp)
         });
-
       })
       .catch((error)=>{
         console.log(error)
       })
-  }
-
-  function welcome(agent) {
-    agent.add(`Welcome to my agent DUUDE OMG ITS WORKING!!!!`);
-  }
- 
-  function fallback(agent) {
-    agent.add(`I didn't understand DUDE`);
-    agent.add(`I'm sorry, can you try again DUDE?`);
-  }
-
-  function question1(agent) {
-    agent.add('Received!!');
-  }
-
-  function question2(agent) {
-    const products = [
-      {
-        name: 'PS5 ',
-        price: '499'
-      },
-      {
-        name: 'Xbox ',
-        price: '499'
-      },
-    ];
-
-    const productList = products.map(product => product.name).join()
-
-    agent.add(
-      `Our products include ${productList}!!`
-    )
-  }
-
-  async function question3(agent) {
-    const name = agent.parameters.name;
-    const typeofpayment = agent.parameters.typeofpayment;
-
-    const docRef = db.collection('users').doc(session_id);
-
-    await docRef.set({
-      first: name,
-      last: typeofpayment,
-    });
   }
 
   async function getSessionData(agent) {
@@ -161,21 +131,25 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     if (!docFlight.exists && !docRoom.exists && !docCar.exists) {
       agent.add("It doesn't look we have anything booked yet.")
     } else {
-      agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date}. We have a ${docRoom.data().roomType} room booked for you as well and a ${docCar.data().carType}`)
+      if (docFlight.exists) {
+        agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date.split('T')[0]}.`)     
       }
+      if (docRoom.exists) {
+        `We have a ${docRoom.data().roomType} room booked for you as well`        
+      }
+      if (docCar.exists) {
+        `We have a ${docCar.data().carType} reserved.`
+      }
+    }
   }
 
   let intentMap = new Map();
 
-  intentMap.set('Default Welcome Intent', welcome);
-  intentMap.set('Default Fallback Intent', fallback);
-  intentMap.set('Question 1', question1);
-  intentMap.set('Question 2', question2);
-  intentMap.set('Question 3', question3);
   intentMap.set('Get Weather', weather);
   intentMap.set('BookFlights', bookFlight);
   intentMap.set('Order Query', getSessionData);
   intentMap.set('BookRooms', bookRoom);
   intentMap.set('BookCars', bookCar);
+
   agent.handleRequest(intentMap);
 });
