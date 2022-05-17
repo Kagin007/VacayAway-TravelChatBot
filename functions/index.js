@@ -4,7 +4,7 @@
  
 const functions = require('firebase-functions');
 const axios = require('axios');
-const {WebhookClient, Payload} = require('dialogflow-fulfillment');
+const {WebhookClient} = require('dialogflow-fulfillment');
 
 require('dotenv').config()
 
@@ -14,7 +14,6 @@ process.env.DEBUG = 'dialogflow:debug';
 
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-
 
 initializeApp();
 const db = getFirestore();
@@ -27,6 +26,35 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   let session_id_array = session_id.split("/");
   
   session_id = session_id_array[session_id_array.length - 1]
+
+  //check user name
+  async function loginAccount(agent) {
+    const name = agent.parameters['given-name']
+    const accountSnapshot = db.collection(name);
+    const docAccount = await accountSnapshot.get()
+    
+      if (docAccount) {
+        agent.add(`Hi, its nice to meet you ${name}. Doc account ${docAccount}`)
+
+        //create account for new user
+        const docRef = db.collection(name).doc(session_id);
+
+        await docRef.set({
+          flightDetails: '',
+          carDetails: '',
+          roomDetails: ''
+        });
+
+      } else {
+          agent.add(`Nice to see you again ${name}! Doc account ${docAccount}`) 
+          
+          const docRef = db.collection(name).doc('Test');
+
+          await docRef.set({
+            name: name
+      });
+    }
+  }
 
   async function bookFlight(agent) {
     agent.add('Booking flight...')
@@ -67,35 +95,36 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     agent.add(`Your room has been booked in ${toCity} on ${date}. Is there anything else I can help you with?`)
   };
 
-    async function bookCar(agent) {
-      agent.add('Booking car...')
-  
-      const date = agent.parameters.date.split('T')[0] || 'error no date'
-      const carType = agent.parameters['car_type'] || 'error no car type'
-      const toCity = agent.parameters['geo-city'] || 'error no city'
+  async function bookCar(agent) {
+    agent.add('Booking car...')
 
-      const docRef = db.collection(session_id).doc('carDetails');
-  
-      await docRef.set({
-        date: date,
-        toCity: toCity,
-        carType: carType
+    const date = agent.parameters.date.split('T')[0] || 'error no date'
+    const carType = agent.parameters['car_type'] || 'error no car type'
+    const toCity = agent.parameters['geo-city'] || 'error no city'
+
+    const docRef = db.collection(session_id).doc('carDetails');
+
+    await docRef.set({
+      date: date,
+      toCity: toCity,
+      carType: carType
+    })
+
+    //get weather
+    await axios({
+      url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=${toCity}&key=${API_KEY}&date=${date}`,
       })
-        //update weather for city
-        weather(agent)
-      
-        const weatherSnapshot = db.collection(session_id).doc('weatherDetails');
+      .then(async response => {
+        //save weather info and use as 'context' for upselling
+        const maxTemp = response.data.data.weather[0].maxtempC
 
-        const docWeather = await weatherSnapshot.get();
-
-        const maxTemp = docWeather.data().maxTemp
-
-        if (maxTemp > 18 && carType !== 'convertible') {
-          agent.add(`It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`)
-        } else {
-          agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)          
-        }
-    }
+      if (maxTemp > 18 && carType !== 'convertible') {
+        agent.add(`It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`)
+      } else {
+        agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)   
+      }     
+    })
+  }
 
   async function weather(agent) {
     const city = agent.parameters['geo-city'];
@@ -113,9 +142,11 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         await docRef.set({
           maxTemp: Number(maxTemp)
         });
+
+        agent.add(`Max temp: ${maxTemp}`)
       })
       .catch((error)=>{
-        console.log(error)
+        agent.add(`Whoops! Something went wrong: ${error}`)
       })
   }
 
@@ -135,21 +166,23 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date.split('T')[0]}.`)     
       }
       if (docRoom.exists) {
-        `We have a ${docRoom.data().roomType} room booked for you as well`        
+        agent.add(`We have a ${docRoom.data().roomType} room booked for you as well`)      
       }
       if (docCar.exists) {
-        `We have a ${docCar.data().carType} reserved.`
+        agent.add(`We have a ${docCar.data().carType} reserved.`)
       }
     }
   }
 
   let intentMap = new Map();
 
-  intentMap.set('Get Weather', weather);
+  intentMap.set('GetWeather', weather);
   intentMap.set('BookFlights', bookFlight);
-  intentMap.set('Order Query', getSessionData);
+  intentMap.set('OrderQuery', getSessionData);
   intentMap.set('BookRooms', bookRoom);
   intentMap.set('BookCars', bookCar);
+  intentMap.set('Login', loginAccount)
 
   agent.handleRequest(intentMap);
+
 });
