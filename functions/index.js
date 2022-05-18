@@ -21,6 +21,9 @@ const db = getFirestore();
 exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.onRequest((request, response) => {
   const agent = new WebhookClient({ request, response });
  
+  //get number from signalwire
+  // const clientPhoneNumber = request.body.originalDetectIntentRequest.payload.signalwire.from
+
   //get id of session for reference
   let session_id = request.body.session;
   let session_id_array = session_id.split("/");
@@ -28,40 +31,46 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   session_id = session_id_array[session_id_array.length - 1]
 
   //check user name
-  async function loginAccount(agent) {
-    const name = agent.parameters['given-name']
-    const accountSnapshot = db.collection(name).doc('Test');
+  // async function defaultWelcome(agent) {
+  //   const accountSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
     
-    const account = await accountSnapshot.get()
+  //   const account = await accountSnapshot.get()
 
-    if (!account.exists) {
-      agent.add(`Hi, its nice to meet you ${name}`)
+  //   if (!account.exists) {
+  //     agent.add(`Hi, I see its your first time using our service. Welcome!`)
 
-    } else {
-        agent.add(`Nice to see you again ${name}! Doc account`)
-      }
-  }
+  //     await accountSnapshot.set({
+  //       user: 'No name'
+  //     })
+
+  //   } else {
+  //       agent.add(`Nice to see you again ${account.user}!`)
+  //     }
+  // }
 
   async function bookFlight(agent) {
     agent.add('Booking flight...')
-
+  
     const date = agent.parameters.date.split('T')[0];
     const fromCity = agent.parameters['geo-city'];
     const toCity = agent.parameters['geo-city1'];
     //check if optional flightType
     const flightType = agent.parameters['flight_type'] || '';
 
+    //with session_id
     const docRef = db.collection(session_id).doc('flightDetails');
+
+    //with client phone number from Signalwire
+    // const docRef = db.collection(clientPhoneNumber).doc('flightDetails');
 
     await docRef.set({
       date: date,
       fromCity: fromCity,
       toCity: toCity,
       flightType: flightType
-    });
+    })
 
-    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
-    agent.setContext()
+    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`) 
   };
 
   async function bookRoom(agent) {
@@ -107,10 +116,18 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
         //if temp is over 18 degrees and they haven't already booked a convertable, upsell!
       if (maxTemp > 18 && carType !== 'convertible') {
-
         //send additional context containing temp data in destination city
 
-        agent.setContext( {name: "weather", lifespan: 1, parameters: { temp: maxTemp }});
+        agent.setContext( 
+          {name: "weather",
+          lifespan: 3,
+          parameters: 
+            { 
+              temp: maxTemp,
+              city: toCity,
+              date: date,
+            }
+          });
         //trigger upsell Intent
         agent.setFollowupEvent("upsellCar")
 
@@ -164,9 +181,24 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       }
       if (docCar.exists) {
         agent.add(`We have a ${docCar.data().carType} reserved.`)
-      }
-    }
-  }
+      };
+    };
+  };
+
+  async function upsellCar(agent) {
+    const city = agent.parameters['geo-city'];
+    const date = agent.parameters.date;
+
+    const docRef = db.collection(session_id).doc('carDetails');
+
+    await docRef.set({
+      carType: 'convertible',
+      date: date,
+      toCity: city,
+    });
+
+    agent.add(`Fantastic! Your convertible has been booked for ${date} in ${city}.`)
+  };
 
   let intentMap = new Map();
 
@@ -175,7 +207,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('OrderQuery', getSessionData);
   intentMap.set('BookRooms', bookRoom);
   intentMap.set('BookCars', bookCar);
-  intentMap.set('Login', loginAccount)
+  intentMap.set('upsellCar-yes', upsellCar);
 
   agent.handleRequest(intentMap);
 
