@@ -30,24 +30,6 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   
   session_id = session_id_array[session_id_array.length - 1]
 
-  //check user name
-  // async function defaultWelcome(agent) {
-  //   const accountSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
-    
-  //   const account = await accountSnapshot.get()
-
-  //   if (!account.exists) {
-  //     agent.add(`Hi, I see its your first time using our service. Welcome!`)
-
-  //     await accountSnapshot.set({
-  //       user: 'No name'
-  //     })
-
-  //   } else {
-  //       agent.add(`Nice to see you again ${account.user}!`)
-  //     }
-  // }
-
   async function bookFlight(agent) {
     agent.add('Booking flight...')
   
@@ -70,7 +52,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       flightType: flightType
     })
 
-    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`) 
+    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel or car for when you arrive?`) 
   };
 
   async function bookRoom(agent) {
@@ -116,7 +98,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
         //if temp is over 18 degrees and they haven't already booked a convertable, upsell!
       if (maxTemp > 18 && carType !== 'convertible') {
-        //send additional context containing temp data in destination city
+        //send additional context containing temp data for destination city
 
         agent.setContext( 
           {name: "weather",
@@ -134,8 +116,8 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       } else {
         agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)   
       }     
-    })
-  }
+    });
+  };
 
   async function weather(agent) {
     const city = agent.parameters['geo-city'];
@@ -159,7 +141,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       .catch((error)=>{
         agent.add(`Whoops! Something went wrong: ${error}`)
       })
-  }
+  };
 
   async function getSessionData(agent) {
     const flightSnapshot = db.collection(session_id).doc('flightDetails');
@@ -200,8 +182,36 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     agent.add(`Fantastic! Your convertible has been booked for ${date} in ${city}.`)
   };
 
+  //greet a new or returning customer
+  async function greeting(agent) {
+    const userSnapshot = db.collection(session_id).doc('userInfo');
+
+    const docUserInfo = await userSnapshot.get();
+
+      //trigger returning customer intent
+    if (docUserInfo.exists) {
+      agent.add(`Its nice to see you again ${docUserInfo.data().name}! Would you like to book a flight, car, or hotel?`)
+    } else {
+      //trigger new customer intent
+      agent.setFollowupEvent("newCustomer")
+    } 
+  };
+
+  async function setName(agent) {
+    const name = agent.parameters['given-name'];
+
+    const userSnapshot = db.collection(session_id).doc('userInfo');
+
+    await userSnapshot.set({
+      'name': name,
+    })
+    agent.add(`Thanks ${name}! We have added you to our records. Can I help you book a flight, car, or hotel?`)
+  }
+
   let intentMap = new Map();
 
+  intentMap.set('Default Welcome Intent', greeting)
+  intentMap.set('getName-yes', setName)
   intentMap.set('GetWeather', weather);
   intentMap.set('BookFlights', bookFlight);
   intentMap.set('OrderQuery', getSessionData);
@@ -210,5 +220,4 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('upsellCar-yes', upsellCar);
 
   agent.handleRequest(intentMap);
-
 });
