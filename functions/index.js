@@ -4,7 +4,7 @@
  
 const functions = require('firebase-functions');
 const axios = require('axios');
-const {WebhookClient, Payload} = require('dialogflow-fulfillment');
+const {WebhookClient} = require('dialogflow-fulfillment');
 
 require('dotenv').config()
 
@@ -61,6 +61,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     });
 
     agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
+    agent.setContext()
   };
 
   async function bookRoom(agent) {
@@ -104,10 +105,13 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         //save weather info and use as 'context' for upselling
         const maxTemp = response.data.data.weather[0].maxtempC
 
+        //if temp is over 18 degrees and they haven't already booked a convertable, upsell!
       if (maxTemp > 18 && carType !== 'convertible') {
 
-        // `It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`
+        //send additional context containing temp data in destination city
 
+        agent.setContext( {name: "weather", lifespan: 1, parameters: { temp: maxTemp }});
+        //trigger upsell Intent
         agent.setFollowupEvent("upsellCar")
 
       } else {
@@ -133,7 +137,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
           maxTemp: Number(maxTemp)
         });
 
-        agent.add(`Max temp: ${maxTemp}`)
+        agent.add(`The max temp in your destination city is ${maxTemp} degrees`)
       })
       .catch((error)=>{
         agent.add(`Whoops! Something went wrong: ${error}`)
