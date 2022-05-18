@@ -4,7 +4,7 @@
  
 const functions = require('firebase-functions');
 const axios = require('axios');
-const {WebhookClient} = require('dialogflow-fulfillment');
+const {WebhookClient, Payload} = require('dialogflow-fulfillment');
 
 require('dotenv').config()
 
@@ -30,30 +30,16 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   //check user name
   async function loginAccount(agent) {
     const name = agent.parameters['given-name']
-    const accountSnapshot = db.collection(name);
-    const docAccount = await accountSnapshot.get()
+    const accountSnapshot = db.collection(name).doc('Test');
     
-      if (docAccount) {
-        agent.add(`Hi, its nice to meet you ${name}. Doc account ${docAccount}`)
+    const account = await accountSnapshot.get()
 
-        //create account for new user
-        const docRef = db.collection(name).doc(session_id);
+    if (!account.exists) {
+      agent.add(`Hi, its nice to meet you ${name}`)
 
-        await docRef.set({
-          flightDetails: '',
-          carDetails: '',
-          roomDetails: ''
-        });
-
-      } else {
-          agent.add(`Nice to see you again ${name}! Doc account ${docAccount}`) 
-          
-          const docRef = db.collection(name).doc('Test');
-
-          await docRef.set({
-            name: name
-      });
-    }
+    } else {
+        agent.add(`Nice to see you again ${name}! Doc account`)
+      }
   }
 
   async function bookFlight(agent) {
@@ -119,7 +105,11 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         const maxTemp = response.data.data.weather[0].maxtempC
 
       if (maxTemp > 18 && carType !== 'convertible') {
-        agent.add(`It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`)
+
+        // `It looks like its going to be ${maxTemp} degrees in ${toCity}. Would you like to upgrade to a convertible?`
+
+        agent.setFollowupEvent("upsellCar")
+
       } else {
         agent.add(`Your ${carType} has been booked for ${date} for ${toCity}. Is there anything else I can help you with?`)   
       }     
