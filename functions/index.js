@@ -31,13 +31,13 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   session_id = session_id_array[session_id_array.length - 1]
 
   async function bookFlight(agent) {
-    agent.add('Booking flight...')
-  
     const date = agent.parameters.date.split('T')[0];
     const fromCity = agent.parameters['geo-city'];
     const toCity = agent.parameters['geo-city1'];
-    //check if optional flightType
+    // check if optional flightType
     const flightType = agent.parameters['flight_type'] || '';
+
+    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
 
     //with session_id
     const docRef = db.collection(session_id).doc('flightDetails');
@@ -51,16 +51,14 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       toCity: toCity,
       flightType: flightType
     })
-
-    agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel or car for when you arrive?`) 
   };
 
   async function bookRoom(agent) {
-    agent.add('Booking room...')
-
     const date = agent.parameters.date.split('T')[0] || 'error no date'
     const roomType = agent.parameters['room_type'] || 'error no room'
     const toCity = agent.parameters['geo-city'] || 'error no city'
+
+    agent.add(`Your room has been booked in ${toCity} on ${date}. Is there anything else I can help you with?`)
 
     const docRef = db.collection(session_id).doc('roomDetails');
 
@@ -69,8 +67,6 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       toCity: toCity,
       roomType: roomType
     });
-
-    agent.add(`Your room has been booked in ${toCity} on ${date}. Is there anything else I can help you with?`)
   };
 
   async function bookCar(agent) {
@@ -136,7 +132,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
           maxTemp: Number(maxTemp)
         });
 
-        agent.add(`The max temp in your destination city is ${maxTemp} degrees`)
+        agent.add(`The max temp in ${city} is ${maxTemp} degrees`)
       })
       .catch((error)=>{
         agent.add(`Whoops! Something went wrong: ${error}`)
@@ -184,6 +180,8 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
   //greet a new or returning customer
   async function greeting(agent) {
+    agent.add('Hi')
+
     const userSnapshot = db.collection(session_id).doc('userInfo');
 
     const docUserInfo = await userSnapshot.get();
@@ -208,6 +206,10 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     agent.add(`Thanks ${name}! We have added you to our records. Can I help you book a flight, car, or hotel?`)
   }
 
+  function cookies(agent) {
+    agent.add(`I like cookies too!`)
+  }
+
   let intentMap = new Map();
 
   intentMap.set('Default Welcome Intent', greeting)
@@ -218,6 +220,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('BookRooms', bookRoom);
   intentMap.set('BookCars', bookCar);
   intentMap.set('upsellCar-yes', upsellCar);
+  intentMap.set('Cookies', cookies);
 
   agent.handleRequest(intentMap);
 });
