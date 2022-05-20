@@ -198,15 +198,13 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
           lifespan: 5,
           parameters: { "status": "new" }
         })
-        // agent.setFollowupEvent("newCustomer")
         agent.add("Welcome to VacayAway's chatbot! It looks like you are a new customer! What's your name?")
       }
 
       if (docUserInfo.exists) {
+        //trigger new customer intent
         agent.add(`Its nice to see you again ${docUserInfo.data().name}! Would you like to book a flight, car, or hotel?`)         
       }     
-
-      //trigger new customer intent    
   };
 
   async function setName(agent) {
@@ -232,7 +230,6 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     if (docUserInfo.exists) {
       agent.add(`Thanks for using VacayAway's AI Travel Chatbot ${docUserInfo.data().name}! Have a wonderful day!`)
     } else {
-      //trigger new customer intent
       agent.add("Thanks for using VacayAway's AI Travel Chatbot! Have a wonderful day!")
     } 
   };
