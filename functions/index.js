@@ -120,19 +120,26 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
       url: `https://api.worldweatheronline.com/premium/v1/weather.ashx?format=json&num_of_days=1&q=${city}&key=${API_KEY}&date=${date}`,
       })
       .then(async response => {
-        //save weather info and use as 'context' for upselling
-        const maxTemp = response.data.data.weather[0].maxtempC
+        
+        let maxTemp = response.data.data.weather[0].maxtempC
+        let forecast = response.data.data.weather[0];
+        let location = response.data.data.request[0];
+        let conditions = response.data.data['current_condition'][0];
+        let currentConditions = conditions['weatherDesc'][0]['value'];
 
         const docRef = db.collection(clientPhoneNumber).doc('weatherDetails');
-
+        //save weather info and use as 'context' for upselling
         await docRef.set({
           maxTemp: Number(maxTemp)
         });
 
-        agent.add(`The max temp in ${city} is ${maxTemp} degrees`)
-      })
-      .catch((error)=>{
-        agent.add(`Whoops! Something went wrong: ${error}`)
+        let output = `Current conditions in the ${location['type']} 
+        ${location['query']} are ${currentConditions} with a projected high of
+        ${forecast['maxtempC']}°C or ${forecast['maxtempF']}°F and a low of 
+        ${forecast['mintempC']}°C or ${forecast['mintempF']}°F on 
+        ${forecast.date}.`;
+        
+        agent.add(output)
       })
   };
 
@@ -179,17 +186,27 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
   //greet a new or returning customer
   async function greeting(agent) {
-    const userSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
+    let userSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
+    
 
-    const docUserInfo = await userSnapshot.get();
+      let docUserInfo = await userSnapshot.get().catch( e => {
+        console.log(e)
+      })
+      if (!docUserInfo.exists) {
+        agent.setContext({
+          name: "new_customer",
+          lifespan: 5,
+          parameters: { "status": "new" }
+        })
+        // agent.setFollowupEvent("newCustomer")
+        agent.add("Welcome to VacayAway's chatbot! It looks like you are a new customer! What's your name?")
+      }
 
-      //trigger returning customer intent
-    if (docUserInfo.exists) {
-      agent.add(`Its nice to see you again ${docUserInfo.data().name}! Would you like to book a flight, car, or hotel?`)
-    } else {
-      //trigger new customer intent
-      agent.setFollowupEvent("newCustomer")
-    } 
+      if (docUserInfo.exists) {
+        agent.add(`Its nice to see you again ${docUserInfo.data().name}! Would you like to book a flight, car, or hotel?`)         
+      }     
+
+      //trigger new customer intent    
   };
 
   async function setName(agent) {
@@ -207,10 +224,23 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     agent.add(`I like cookies too!`)
   }
 
+  async function quit(agent) {
+    const userSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
+
+    const docUserInfo = await userSnapshot.get();
+
+    if (docUserInfo.exists) {
+      agent.add(`Thanks for using VacayAway's AI Travel Chatbot ${docUserInfo.data().name}! Have a wonderful day!`)
+    } else {
+      //trigger new customer intent
+      agent.add("Thanks for using VacayAway's AI Travel Chatbot! Have a wonderful day!")
+    } 
+  };
+
   let intentMap = new Map();
 
   intentMap.set('Default Welcome Intent', greeting)
-  intentMap.set('getName-yes', setName)
+  intentMap.set('newCustomer', setName)
   intentMap.set('GetWeather', weather);
   intentMap.set('BookFlights', bookFlight);
   intentMap.set('OrderQuery', getSessionData);
@@ -218,6 +248,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   intentMap.set('BookCars', bookCar);
   intentMap.set('upsellCar-yes', upsellCar);
   intentMap.set('Cookies', cookies);
+  intentMap.set('Quit', quit)
 
   agent.handleRequest(intentMap);
 });
