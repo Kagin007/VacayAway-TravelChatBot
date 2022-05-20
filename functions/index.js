@@ -21,14 +21,14 @@ const db = getFirestore();
 exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.onRequest((request, response) => {
   const agent = new WebhookClient({ request, response });
  
-  //get number from signalwire
-  // const clientPhoneNumber = request.body.originalDetectIntentRequest.payload.signalwire.from
+  // get number from signalwire
+  const clientPhoneNumber = request.body.originalDetectIntentRequest.payload.signalwire.from
 
   //get id of session for reference
-  let session_id = request.body.session;
-  let session_id_array = session_id.split("/");
+  // let session_id = request.body.session;
+  // let session_id_array = session_id.split("/");
   
-  session_id = session_id_array[session_id_array.length - 1]
+  // session_id = session_id_array[session_id_array.length - 1]
 
   async function bookFlight(agent) {
     const date = agent.parameters.date.split('T')[0];
@@ -40,10 +40,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     agent.add(`Your flight has been booked for ${date} from ${fromCity} to ${toCity}. Would you like to book a hotel for when you arrive?`)
 
     //with session_id
-    const docRef = db.collection(session_id).doc('flightDetails');
-
-    //with client phone number from Signalwire
-    // const docRef = db.collection(clientPhoneNumber).doc('flightDetails');
+    const docRef = db.collection(clientPhoneNumber).doc('flightDetails');
 
     await docRef.set({
       date: date,
@@ -60,7 +57,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
     agent.add(`Your room has been booked in ${toCity} on ${date}. Is there anything else I can help you with?`)
 
-    const docRef = db.collection(session_id).doc('roomDetails');
+    const docRef = db.collection(clientPhoneNumber).doc('roomDetails');
 
     await docRef.set({
       date: date,
@@ -76,7 +73,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     const carType = agent.parameters['car_type'] || 'error no car type'
     const toCity = agent.parameters['geo-city'] || 'error no city'
 
-    const docRef = db.collection(session_id).doc('carDetails');
+    const docRef = db.collection(clientPhoneNumber).doc('carDetails');
 
     await docRef.set({
       date: date,
@@ -126,7 +123,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
         //save weather info and use as 'context' for upselling
         const maxTemp = response.data.data.weather[0].maxtempC
 
-        const docRef = db.collection(session_id).doc('weatherDetails');
+        const docRef = db.collection(clientPhoneNumber).doc('weatherDetails');
 
         await docRef.set({
           maxTemp: Number(maxTemp)
@@ -140,9 +137,9 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   };
 
   async function getSessionData(agent) {
-    const flightSnapshot = db.collection(session_id).doc('flightDetails');
-    const roomSnapshot = db.collection(session_id).doc('roomDetails');
-    const carSnapshot = db.collection(session_id).doc('carDetails');
+    const flightSnapshot = db.collection(clientPhoneNumber).doc('flightDetails');
+    const roomSnapshot = db.collection(clientPhoneNumber).doc('roomDetails');
+    const carSnapshot = db.collection(clientPhoneNumber).doc('carDetails');
 
     const docFlight = await flightSnapshot.get();
     const docRoom = await roomSnapshot.get();
@@ -151,15 +148,17 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     if (!docFlight.exists && !docRoom.exists && !docCar.exists) {
       agent.add("It doesn't look we have anything booked yet.")
     } else {
+        let responseString = "";
       if (docFlight.exists) {
-        agent.add(`Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date.split('T')[0]}.`)     
+        responseString += `Our records show you have a flight booked from ${docFlight.data().fromCity} to ${docFlight.data().toCity} on ${docFlight.data().date.split('T')[0]}.`   
       }
       if (docRoom.exists) {
-        agent.add(`We have a ${docRoom.data().roomType} room booked for you as well`)      
+        responseString += `We have a ${docRoom.data().roomType} room booked for you as well.`  
       }
       if (docCar.exists) {
-        agent.add(`We have a ${docCar.data().carType} reserved.`)
+        responseString += `We have a ${docCar.data().carType} reserved.`
       };
+      agent.add(responseString)
     };
   };
 
@@ -167,7 +166,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
     const city = agent.parameters['geo-city'];
     const date = agent.parameters.date;
 
-    const docRef = db.collection(session_id).doc('carDetails');
+    const docRef = db.collection(clientPhoneNumber).doc('carDetails');
 
     await docRef.set({
       carType: 'convertible',
@@ -180,9 +179,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
 
   //greet a new or returning customer
   async function greeting(agent) {
-    agent.add('Hi')
-
-    const userSnapshot = db.collection(session_id).doc('userInfo');
+    const userSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
 
     const docUserInfo = await userSnapshot.get();
 
@@ -198,7 +195,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
   async function setName(agent) {
     const name = agent.parameters['given-name'];
 
-    const userSnapshot = db.collection(session_id).doc('userInfo');
+    const userSnapshot = db.collection(clientPhoneNumber).doc('userInfo');
 
     await userSnapshot.set({
       'name': name,
