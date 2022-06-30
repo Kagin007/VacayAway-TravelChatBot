@@ -133,7 +133,7 @@ exports.dialogflowFirebaseFulfillment = functions.region('us-central1').https.on
           maxTemp: Number(maxTemp)
         });
 
-        let output = `Current conditions in the ${location['type']} 
+        let output = `Weather conditions in the ${location['type']} 
         ${location['query']} are ${currentConditions} with a projected high of
         ${forecast['maxtempC']}°C or ${forecast['maxtempF']}°F and a low of 
         ${forecast['mintempC']}°C or ${forecast['mintempF']}°F on 
